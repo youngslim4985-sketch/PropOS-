@@ -1,0 +1,74 @@
+{
+  "entities": {
+    "Property": {
+      "title": "Property",
+      "description": "A managed real estate asset.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "address": { "type": "string" },
+        "units": { "type": "number" },
+        "occupancy": { "type": "number" },
+        "noi": { "type": "number" },
+        "ownerId": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "maintenance", "vacant"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["address", "ownerId"]
+    },
+    "Deal": {
+      "title": "Deal",
+      "description": "An acquisition opportunity (DealFlow).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "address": { "type": "string" },
+        "price": { "type": "number" },
+        "arv": { "type": "number" },
+        "rehabCost": { "type": "number" },
+        "score": { "type": "number" },
+        "status": { "type": "string", "enum": ["new", "analyzing", "offer-sent", "closed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["address", "price"]
+    },
+    "Buyer": {
+      "title": "Buyer",
+      "description": "A potential investor or buyer (BuyerFlow).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "budget": { "type": "number" },
+        "location": { "type": "string" },
+        "strategy": { "type": "string", "enum": ["fix-and-flip", "buy-and-hold", "cash-quick-close", "first-time"] },
+        "intentScore": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "budget"]
+    },
+    "Match": {
+      "title": "Match",
+      "description": "A match between a Deal and a Buyer.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "dealId": { "type": "string" },
+        "buyerId": { "type": "string" },
+        "score": { "type": "number" },
+        "reasons": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string", "enum": ["pending", "contacted", "accepted", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["dealId", "buyerId", "score"]
+    }
+  },
+  "firestore": {
+    "/properties/{propertyId}": { "schema": "Property", "description": "Managed properties" },
+    "/deals/{dealId}": { "schema": "Deal", "description": "Acquisition deals" },
+    "/buyers/{buyerId}": { "schema": "Buyer", "description": "Investor leads" },
+    "/matches/{matchId}": { "schema": "Match", "description": "Deal-to-buyer matches" }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "PropOS",
+  "description": "A 3-sided real estate operating system for property management, acquisition (DealFlow), and liquidity (BuyerFlow).",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "AI-driven property management",
+    "Real estate deal acquisition engine",
+    "Buyer matching and liquidity engine"
+  ]
+}

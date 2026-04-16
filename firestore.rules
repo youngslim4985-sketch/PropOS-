@@ -1,0 +1,84 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Property: address, units, occupancy, noi, ownerId, status, createdAt
+    // Deal: title, address, price, arv, rehabCost, score, status, createdAt
+    // Buyer: name, email, budget, location, strategy, intentScore, createdAt
+    // Match: dealId, buyerId, score, reasons, status, createdAt
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidProperty(data) {
+      return data.address is string && data.address.size() > 0 &&
+             data.ownerId is string &&
+             data.units is number &&
+             data.occupancy is number &&
+             data.status in ['active', 'maintenance', 'vacant'];
+    }
+
+    function isValidDeal(data) {
+      return data.address is string && data.address.size() > 0 &&
+             data.price is number &&
+             data.status in ['new', 'analyzing', 'offer-sent', 'closed'];
+    }
+
+    function isValidBuyer(data) {
+      return data.name is string && data.name.size() > 0 &&
+             data.email is string &&
+             data.budget is number &&
+             data.strategy in ['fix-and-flip', 'buy-and-hold', 'cash-quick-close', 'first-time'];
+    }
+
+    function isValidMatch(data) {
+      return data.dealId is string &&
+             data.buyerId is string &&
+             data.score is number;
+    }
+
+    // Rules
+    match /properties/{propertyId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidProperty(request.resource.data);
+      allow update: if isAuthenticated() && isValidProperty(request.resource.data);
+      allow delete: if isAuthenticated();
+    }
+
+    match /deals/{dealId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidDeal(request.resource.data);
+      allow update: if isAuthenticated() && isValidDeal(request.resource.data);
+      allow delete: if isAuthenticated();
+    }
+
+    match /buyers/{buyerId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidBuyer(request.resource.data);
+      allow update: if isAuthenticated() && isValidBuyer(request.resource.data);
+      allow delete: if isAuthenticated();
+    }
+
+    match /matches/{matchId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidMatch(request.resource.data);
+      allow update: if isAuthenticated() && isValidMatch(request.resource.data);
+      allow delete: if isAuthenticated();
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId);
+    }
+  }
+}
