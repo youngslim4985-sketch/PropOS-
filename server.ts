@@ -57,9 +57,33 @@ async function startServer() {
             plan: plan,
             stripeCustomerId: session.customer,
             stripeSubscriptionId: session.subscription,
+            subscriptionStatus: "active",
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           });
           console.log(`Workspace ${workspaceId} upgraded to ${plan}`);
+        }
+        break;
+      }
+      case "customer.subscription.updated": {
+        const subscription = event.data.object as Stripe.Subscription;
+        const plan = subscription.metadata.plan;
+        const status = subscription.status;
+
+        const snapshot = await db.collection("workspaces")
+          .where("stripeSubscriptionId", "==", subscription.id)
+          .limit(1)
+          .get();
+        
+        if (!snapshot.empty) {
+          const workspaceDoc = snapshot.docs[0];
+          const updateData: any = {
+            subscriptionStatus: status,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          };
+          if (plan) updateData.plan = plan;
+          
+          await workspaceDoc.ref.update(updateData);
+          console.log(`Workspace ${workspaceDoc.id} subscription updated: ${status}`);
         }
         break;
       }
@@ -75,9 +99,47 @@ async function startServer() {
           const workspaceDoc = snapshot.docs[0];
           await workspaceDoc.ref.update({
             plan: "free",
+            subscriptionStatus: "canceled",
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           });
           console.log(`Workspace ${workspaceDoc.id} downgraded to free`);
+        }
+        break;
+      }
+      case "invoice.payment_failed": {
+        const invoice = event.data.object as any;
+        if (invoice.subscription) {
+          const snapshot = await db.collection("workspaces")
+            .where("stripeSubscriptionId", "==", invoice.subscription)
+            .limit(1)
+            .get();
+          
+          if (!snapshot.empty) {
+            const workspaceDoc = snapshot.docs[0];
+            await workspaceDoc.ref.update({
+              subscriptionStatus: "past_due",
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            console.log(`Workspace ${workspaceDoc.id} payment failed`);
+          }
+        }
+        break;
+      }
+      case "invoice.paid": {
+        const invoice = event.data.object as any;
+        if (invoice.subscription) {
+          const snapshot = await db.collection("workspaces")
+            .where("stripeSubscriptionId", "==", invoice.subscription)
+            .limit(1)
+            .get();
+          
+          if (!snapshot.empty) {
+            const workspaceDoc = snapshot.docs[0];
+            await workspaceDoc.ref.update({
+              subscriptionStatus: "active",
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          }
         }
         break;
       }
@@ -91,20 +153,15 @@ async function startServer() {
 
   app.post("/api/stripe/create-checkout-session", async (req, res) => {
     try {
-      const { workspaceId, plan, successUrl, cancelUrl } = req.body;
+      const { workspaceId, plan, successUrl, cancelUrl, customerId } = req.body;
       
       if (!workspaceId || !plan) {
         return res.status(400).json({ error: "Missing workspaceId or plan" });
       }
 
-      // Define prices (these would normally be in Stripe or a config)
-      const prices: Record<string, string> = {
-        pro: "price_PRO_ID_PLACEHOLDER", // Real price IDs would be needed
-        enterprise: "price_ENT_ID_PLACEHOLDER"
-      };
-
       const session = await getStripe().checkout.sessions.create({
         payment_method_types: ["card"],
+        customer: customerId || undefined,
         line_items: [
           {
             price_data: {
@@ -122,6 +179,9 @@ async function startServer() {
         success_url: successUrl,
         cancel_url: cancelUrl,
         client_reference_id: workspaceId,
+        subscription_data: {
+          metadata: { plan }
+        },
         metadata: { plan }
       });
 

@@ -9,6 +9,7 @@
         "name": { "type": "string" },
         "ownerId": { "type": "string" },
         "plan": { "type": "string", "enum": ["free", "pro", "enterprise"] },
+        "subscriptionStatus": { "type": "string" },
         "stripeCustomerId": { "type": "string" },
         "stripeSubscriptionId": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }

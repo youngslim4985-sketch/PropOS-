@@ -14,6 +14,14 @@ export function BillingDashboard() {
   const [isUpgrading, setIsUpgrading] = useState<string | null>(null);
   const [isRedirecting, setIsRedirecting] = useState(false);
 
+  useState(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('session_id')) {
+      toast.success('Subscription updated successfully!');
+      window.history.replaceState({}, document.title, "/");
+    }
+  });
+
   const totalSpent = useMemo(() => {
     return usageLogs.reduce((acc, log) => acc + (log.cost || 0), 0);
   }, [usageLogs]);
@@ -51,6 +59,7 @@ export function BillingDashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           workspaceId: activeWorkspace.id,
+          customerId: activeWorkspace.stripeCustomerId,
           plan,
           successUrl: window.location.href + '?session_id={CHECKOUT_SESSION_ID}',
           cancelUrl: window.location.href,
@@ -124,8 +133,13 @@ export function BillingDashboard() {
             <span className="meta-tag">Billing Plan</span>
             <Activity size={16} className="text-muted" />
           </div>
-          <div className="font-display text-2xl font-black tracking-tighter uppercase">
-            {activeWorkspace?.plan || 'N/A'}
+          <div className="flex flex-col">
+            <div className="font-display text-2xl font-black tracking-tighter uppercase flex items-center gap-2">
+              {activeWorkspace?.plan || 'N/A'}
+              {activeWorkspace?.plan !== 'free' && activeWorkspace?.subscriptionStatus && activeWorkspace?.subscriptionStatus !== 'active' && (
+                <Badge variant="destructive" className="text-[8px] uppercase">{activeWorkspace.subscriptionStatus}</Badge>
+              )}
+            </div>
           </div>
           {activeWorkspace?.plan !== 'free' && (
             <Button 
