@@ -1,20 +1,63 @@
 {
   "entities": {
+    "Workspace": {
+      "title": "Workspace",
+      "description": "A multi-tenant workspace container.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "plan": { "type": "string", "enum": ["free", "pro", "enterprise"] },
+        "stripeCustomerId": { "type": "string" },
+        "stripeSubscriptionId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "ownerId"]
+    },
+    "WorkspaceMember": {
+      "title": "WorkspaceMember",
+      "description": "Membership link between a User and a Workspace.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "agent", "viewer"] },
+        "joinedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "workspaceId", "role"]
+    },
+    "UsageLog": {
+      "title": "UsageLog",
+      "description": "Tracks billable actions within a workspace.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "actionType": { "type": "string" },
+        "cost": { "type": "number" },
+        "userId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["workspaceId", "actionType", "cost"]
+    },
     "Property": {
       "title": "Property",
       "description": "A managed real estate asset.",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
+        "workspaceId": { "type": "string" },
         "address": { "type": "string" },
         "units": { "type": "number" },
-        "occupancy": { "type": "number" },
-        "noi": { "type": "number" },
+        "occupied": { "type": "number" },
+        "monthly_rent": { "type": "number" },
         "ownerId": { "type": "string" },
         "status": { "type": "string", "enum": ["active", "maintenance", "vacant"] },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["address", "ownerId"]
+      "required": ["address", "ownerId", "workspaceId"]
     },
     "Deal": {
       "title": "Deal",
@@ -22,6 +65,7 @@
       "type": "object",
       "properties": {
         "id": { "type": "string" },
+        "workspaceId": { "type": "string" },
         "title": { "type": "string" },
         "address": { "type": "string" },
         "price": { "type": "number" },
@@ -31,7 +75,7 @@
         "status": { "type": "string", "enum": ["new", "analyzing", "offer-sent", "closed"] },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["address", "price"]
+      "required": ["address", "price", "workspaceId"]
     },
     "Buyer": {
       "title": "Buyer",
@@ -39,6 +83,7 @@
       "type": "object",
       "properties": {
         "id": { "type": "string" },
+        "workspaceId": { "type": "string" },
         "name": { "type": "string" },
         "email": { "type": "string" },
         "budget": { "type": "number" },
@@ -47,7 +92,7 @@
         "intentScore": { "type": "number" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["name", "email", "budget"]
+      "required": ["name", "email", "budget", "workspaceId"]
     },
     "Match": {
       "title": "Match",
@@ -55,6 +100,7 @@
       "type": "object",
       "properties": {
         "id": { "type": "string" },
+        "workspaceId": { "type": "string" },
         "dealId": { "type": "string" },
         "buyerId": { "type": "string" },
         "score": { "type": "number" },
@@ -62,13 +108,16 @@
         "status": { "type": "string", "enum": ["pending", "contacted", "accepted", "rejected"] },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["dealId", "buyerId", "score"]
+      "required": ["dealId", "buyerId", "score", "workspaceId"]
     }
   },
   "firestore": {
-    "/properties/{propertyId}": { "schema": "Property", "description": "Managed properties" },
-    "/deals/{dealId}": { "schema": "Deal", "description": "Acquisition deals" },
-    "/buyers/{buyerId}": { "schema": "Buyer", "description": "Investor leads" },
-    "/matches/{matchId}": { "schema": "Match", "description": "Deal-to-buyer matches" }
+    "/workspaces/{workspaceId}": { "schema": "Workspace", "description": "Workspace containers" },
+    "/workspaceMembers/{memberId}": { "schema": "WorkspaceMember", "description": "Memberships" },
+    "/usageLogs/{logId}": { "schema": "UsageLog", "description": "Metering logs" },
+    "/properties/{propertyId}": { "schema": "Property", "description": "Managed properties (scoped by workspaceId)" },
+    "/deals/{dealId}": { "schema": "Deal", "description": "Acquisition deals (scoped by workspaceId)" },
+    "/buyers/{buyerId}": { "schema": "Buyer", "description": "Investor leads (scoped by workspaceId)" },
+    "/matches/{matchId}": { "schema": "Match", "description": "Deal-to-buyer matches (scoped by workspaceId)" }
   }
 }

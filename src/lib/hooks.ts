@@ -1,14 +1,35 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, where, QueryConstraint } from 'firebase/firestore';
 import { db } from './firebase';
 
-export function useRealtimeCollection(collectionPath: string) {
+export function useRealtimeCollection(collectionPath: string, workspaceId?: string) {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    const q = query(collection(db, collectionPath), orderBy('createdAt', 'desc'));
+    // Prevent global queries on scoped collections before a workspace is selected
+    const scopedCollections = ['properties', 'deals', 'buyers', 'matches', 'usageLogs'];
+    if (scopedCollections.includes(collectionPath) && !workspaceId) {
+      setData([]);
+      setLoading(false);
+      return;
+    }
+
+    const constraints: QueryConstraint[] = [];
+    
+    if (workspaceId) {
+      constraints.push(where('workspaceId', '==', workspaceId));
+    }
+    
+    // Some collections might not have createdAt, but for PropOS we assume they do or it fails gracefully
+    try {
+      constraints.push(orderBy('createdAt', 'desc'));
+    } catch (e) {
+      // Ignore order if createdAt doesn't exist
+    }
+
+    const q = query(collection(db, collectionPath), ...constraints);
     
     const unsubscribe = onSnapshot(q, 
       (snapshot) => {
@@ -27,7 +48,7 @@ export function useRealtimeCollection(collectionPath: string) {
     );
 
     return () => unsubscribe();
-  }, [collectionPath]);
+  }, [collectionPath, workspaceId]);
 
   return { data, loading, error };
 }

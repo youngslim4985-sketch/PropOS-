@@ -1,97 +1,79 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Syne:wght@700;800&family=DM+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
 
-@theme inline {
-    --font-heading: var(--font-serif);
-    --font-sans: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    --font-serif: 'Georgia', 'Times New Roman', serif;
-    --font-mono: 'JetBrains Mono', monospace;
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Syne", sans-serif;
+  --font-mono: "DM Mono", monospace;
 
-    --color-background: #FDFCFB;
-    --color-foreground: #121212;
-    --color-card: #FFFFFF;
-    --color-card-foreground: #121212;
-    --color-popover: #FFFFFF;
-    --color-popover-foreground: #121212;
-    --color-primary: #121212;
-    --color-primary-foreground: #FDFCFB;
-    --color-secondary: #F0EEEA;
-    --color-secondary-foreground: #121212;
-    --color-muted: #F0EEEA;
-    --color-muted-foreground: #807D78;
-    --color-accent: #B28B43;
-    --color-accent-foreground: #FFFFFF;
-    --color-destructive: oklch(0.577 0.245 27.325);
-    --color-border: #E0DDD7;
-    --color-input: #E0DDD7;
-    --color-ring: #B28B43;
-
-    --radius-sm: 0px;
-    --radius-md: 0px;
-    --radius-lg: 0px;
-    --radius-xl: 0px;
-    --radius-2xl: 0px;
-    --radius-3xl: 0px;
-    --radius-4xl: 0px;
-}
-
-:root {
-    --background: #FDFCFB;
-    --foreground: #121212;
-    --card: #FFFFFF;
-    --card-foreground: #121212;
-    --popover: #FFFFFF;
-    --popover-foreground: #121212;
-    --primary: #121212;
-    --primary-foreground: #FDFCFB;
-    --secondary: #F0EEEA;
-    --secondary-foreground: #121212;
-    --muted: #F0EEEA;
-    --muted-foreground: #807D78;
-    --accent: #B28B43;
-    --accent-foreground: #FFFFFF;
-    --border: #E0DDD7;
-    --input: #E0DDD7;
-    --ring: #B28B43;
-    --radius: 0px;
+  --color-background: #0a0c12;
+  --color-foreground: #ffffff;
+  --color-card: #11141c;
+  --color-border: #1a1f2e;
+  --color-accent: #c8a96e;
+  --color-accent-secondary: #b8944f;
+  --color-cyan: #00f0ff;
+  --color-muted: #6b7280;
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
-    }
+    @apply border-border;
+  }
   body {
-    @apply bg-background text-foreground antialiased;
-    }
-  html {
-    @apply font-sans;
-    }
-  h1, h2, h3, h4, h5, h6 {
-    @apply font-serif;
+    @apply bg-background text-foreground font-sans antialiased;
+    background-image: 
+      linear-gradient(to right, rgba(26, 31, 46, 0.2) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(26, 31, 46, 0.2) 1px, transparent 1px);
+    background-size: 40px 40px;
   }
 }
 
-@layer utilities {
-  .score-large {
-    font-family: var(--font-serif);
-    font-size: 120px;
-    line-height: 0.8;
-    font-weight: 900;
+@layer components {
+  .terminal-card {
+    @apply bg-card border border-border transition-all duration-300;
   }
-  .meta-tag {
-    font-family: var(--font-serif);
-    font-style: italic;
-    font-size: 0.85rem;
-    color: var(--color-accent);
+
+  .terminal-card:hover {
+    @apply border-accent/50 shadow-[0_0_20px_rgba(200,169,110,0.1)];
   }
+
+  .text-gold { @apply text-accent; }
+  .text-neon-cyan { @apply text-cyan; }
+
+  .status-dot {
+    @apply w-2 h-2 rounded-full inline-block mr-2;
+  }
+
+  .status-dot-active { @apply bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse; }
+  .status-dot-maintenance { @apply bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.6)]; }
+  .status-dot-vacant { @apply bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]; }
+
+  .nav-item-active {
+    @apply text-accent;
+  }
+
   .nav-item-active::after {
     content: '';
-    position: absolute;
-    bottom: -1px;
-    left: 0;
-    width: 100%;
-    height: 2px;
-    background: var(--color-foreground);
+    @apply absolute bottom-0 left-0 w-full h-0.5 bg-accent;
+  }
+
+  .meta-tag {
+    @apply text-[10px] uppercase tracking-[0.2em] font-bold text-muted;
+  }
+
+  .score-large {
+    @apply font-display text-8xl tracking-tighter text-accent;
+  }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-background;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full hover:bg-muted;
   }
 }

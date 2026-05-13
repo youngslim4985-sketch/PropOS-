@@ -2,83 +2,78 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    // Property: address, units, occupancy, noi, ownerId, status, createdAt
-    // Deal: title, address, price, arv, rehabCost, score, status, createdAt
-    // Buyer: name, email, budget, location, strategy, intentScore, createdAt
-    // Match: dealId, buyerId, score, reasons, status, createdAt
-    // ===============================================================
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
 
     // Helper Functions
-    function isAuthenticated() {
+    function isSignedIn() {
       return request.auth != null;
     }
     
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+    function isMember(workspaceId) {
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/workspaceMembers/$(request.auth.uid + "_" + workspaceId));
+    }
+    
+    function getRole(workspaceId) {
+      return get(/databases/$(database)/documents/workspaceMembers/$(request.auth.uid + "_" + workspaceId)).data.role;
     }
 
-    function isValidProperty(data) {
-      return data.address is string && data.address.size() > 0 &&
-             data.ownerId is string &&
-             data.units is number &&
-             data.occupancy is number &&
-             data.status in ['active', 'maintenance', 'vacant'];
+    function isAdmin(workspaceId) {
+      return isMember(workspaceId) && getRole(workspaceId) == 'admin';
     }
 
-    function isValidDeal(data) {
-      return data.address is string && data.address.size() > 0 &&
-             data.price is number &&
-             data.status in ['new', 'analyzing', 'offer-sent', 'closed'];
+    // Workspaces
+    match /workspaces/{workspaceId} {
+      allow read: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isMember(workspaceId));
+      allow create: if isSignedIn(); // Allow creating new workspaces
+      allow update: if isAdmin(workspaceId);
     }
 
-    function isValidBuyer(data) {
-      return data.name is string && data.name.size() > 0 &&
-             data.email is string &&
-             data.budget is number &&
-             data.strategy in ['fix-and-flip', 'buy-and-hold', 'cash-quick-close', 'first-time'];
+    // Workspace Memberships
+    // Using custom IDs like userId_workspaceId for easy lookups
+    match /workspaceMembers/{memberId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isMember(resource.data.workspaceId));
+      allow create: if isSignedIn(); // Allow joining or following creation logic
+      allow delete: if isAdmin(resource.data.workspaceId);
     }
 
-    function isValidMatch(data) {
-      return data.dealId is string &&
-             data.buyerId is string &&
-             data.score is number;
+    // Usage Logs (Metering)
+    match /usageLogs/{logId} {
+      allow read: if isAdmin(resource.data.workspaceId);
+      allow create: if isMember(request.resource.data.workspaceId);
+      allow update, delete: if false; // Immutable logs
     }
 
-    // Rules
+    // Business Entities (Scoped)
     match /properties/{propertyId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidProperty(request.resource.data);
-      allow update: if isAuthenticated() && isValidProperty(request.resource.data);
-      allow delete: if isAuthenticated();
+      allow read: if isMember(resource.data.workspaceId);
+      allow create: if isMember(request.resource.data.workspaceId);
+      allow update: if isMember(resource.data.workspaceId);
+      allow delete: if isAdmin(resource.data.workspaceId);
     }
 
     match /deals/{dealId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidDeal(request.resource.data);
-      allow update: if isAuthenticated() && isValidDeal(request.resource.data);
-      allow delete: if isAuthenticated();
+      allow read: if isMember(resource.data.workspaceId);
+      allow create: if isMember(request.resource.data.workspaceId);
+      allow update: if isMember(resource.data.workspaceId);
+      allow delete: if isAdmin(resource.data.workspaceId);
     }
 
     match /buyers/{buyerId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidBuyer(request.resource.data);
-      allow update: if isAuthenticated() && isValidBuyer(request.resource.data);
-      allow delete: if isAuthenticated();
+      allow read: if isMember(resource.data.workspaceId);
+      allow create: if isMember(request.resource.data.workspaceId);
+      allow update: if isMember(resource.data.workspaceId);
+      allow delete: if isAdmin(resource.data.workspaceId);
     }
 
     match /matches/{matchId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidMatch(request.resource.data);
-      allow update: if isAuthenticated() && isValidMatch(request.resource.data);
-      allow delete: if isAuthenticated();
-    }
-
-    match /users/{userId} {
-      allow read: if isOwner(userId);
-      allow write: if isOwner(userId);
+      allow read: if isMember(resource.data.workspaceId);
+      allow create: if isMember(request.resource.data.workspaceId);
+      allow update: if isMember(resource.data.workspaceId);
+      allow delete: if isAdmin(resource.data.workspaceId);
     }
   }
 }
