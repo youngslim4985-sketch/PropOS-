@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import { useRealtimeCollection } from '@/src/lib/hooks';
 import { useTenant } from '@/src/lib/TenantContext';
 import { Card, CardContent } from '@/components/ui/card';
@@ -50,8 +50,16 @@ export function BillingDashboard() {
     }
   };
 
+  const upgradeKeyRef = useRef<string | null>(null);
+
   const handleUpgrade = async (plan: 'pro' | 'enterprise') => {
     if (!activeWorkspace) return;
+    
+    // Ensure we have a stable key for this session's upgrade attempt
+    if (!upgradeKeyRef.current) {
+      upgradeKeyRef.current = `upg_${activeWorkspace.id}_${Math.random().toString(36).slice(2, 11)}`;
+    }
+
     setIsUpgrading(plan);
     try {
       const response = await fetch('/api/stripe/create-checkout-session', {
@@ -63,6 +71,7 @@ export function BillingDashboard() {
           plan,
           successUrl: window.location.href + '?session_id={CHECKOUT_SESSION_ID}',
           cancelUrl: window.location.href,
+          idempotencyKey: upgradeKeyRef.current
         })
       });
       
@@ -70,10 +79,17 @@ export function BillingDashboard() {
       if (data.url) {
         window.location.href = data.url;
       } else {
+        // If it's a conflict (409), it means it's already working, so we just wait or show a message
+        if (response.status === 409) {
+          toast.info("An upgrade session is already active.");
+          return;
+        }
         throw new Error(data.error || 'Failed to create checkout session');
       }
     } catch (error: any) {
       toast.error(error.message);
+      // Reset key on actual failure so they can try fresh if they want
+      upgradeKeyRef.current = null;
     } finally {
       setIsUpgrading(null);
     }

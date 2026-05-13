@@ -110,6 +110,36 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["dealId", "buyerId", "score", "workspaceId"]
+    },
+    "IdempotencyRequest": {
+      "title": "IdempotencyRequest",
+      "description": "De-duplication record for mutations.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "completed", "failed"] },
+        "workspaceId": { "type": "string" },
+        "response": { "type": "object" },
+        "error": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "expiresAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["status", "workspaceId", "createdAt"]
+    },
+    "IntentEvent": {
+      "title": "IntentEvent",
+      "description": "Audit trail of user or system intent before execution.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "type": { "type": "string" },
+        "proposedBy": { "type": "string" },
+        "data": { "type": "object" },
+        "idempotencyKey": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["workspaceId", "type", "proposedBy", "timestamp"]
     }
   },
   "firestore": {
@@ -119,6 +149,8 @@
     "/properties/{propertyId}": { "schema": "Property", "description": "Managed properties (scoped by workspaceId)" },
     "/deals/{dealId}": { "schema": "Deal", "description": "Acquisition deals (scoped by workspaceId)" },
     "/buyers/{buyerId}": { "schema": "Buyer", "description": "Investor leads (scoped by workspaceId)" },
-    "/matches/{matchId}": { "schema": "Match", "description": "Deal-to-buyer matches (scoped by workspaceId)" }
+    "/matches/{matchId}": { "schema": "Match", "description": "Deal-to-buyer matches (scoped by workspaceId)" },
+    "/idempotencyRequests/{key}": { "schema": "IdempotencyRequest", "description": "De-duplication tokens" },
+    "/intentEvents/{eventId}": { "schema": "IntentEvent", "description": "History of intent (audit trail)" }
   }
 }

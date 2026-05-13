@@ -4,6 +4,7 @@ import { createServer as createViteServer } from "vite";
 import Stripe from "stripe";
 import bodyParser from "body-parser";
 import admin from "firebase-admin";
+import { withIdempotency, recordIntent } from "./src/lib/idempotency";
 
 // Initialize Firebase Admin
 // Note: In AI Studio, we can often rely on default credentials or env vars
@@ -153,40 +154,58 @@ async function startServer() {
 
   app.post("/api/stripe/create-checkout-session", async (req, res) => {
     try {
-      const { workspaceId, plan, successUrl, cancelUrl, customerId } = req.body;
+      const { workspaceId, plan, successUrl, cancelUrl, customerId, idempotencyKey } = req.body;
       
       if (!workspaceId || !plan) {
         return res.status(400).json({ error: "Missing workspaceId or plan" });
       }
 
-      const session = await getStripe().checkout.sessions.create({
-        payment_method_types: ["card"],
-        customer: customerId || undefined,
-        line_items: [
-          {
-            price_data: {
-              currency: "usd",
-              product_data: {
-                name: `PropOS ${plan.toUpperCase()} Plan`,
-              },
-              unit_amount: plan === "pro" ? 4900 : 19900, // $49 or $199
-              recurring: { interval: "month" },
-            },
-            quantity: 1,
-          },
-        ],
-        mode: "subscription",
-        success_url: successUrl,
-        cancel_url: cancelUrl,
-        client_reference_id: workspaceId,
-        subscription_data: {
-          metadata: { plan }
-        },
-        metadata: { plan }
+      // Use provided key or generate a deterministic one
+      const key = idempotencyKey || `checkout_${workspaceId}_${plan}_${Date.now()}`;
+
+      await recordIntent({
+        workspaceId,
+        type: "UPGRADE_REQUESTED",
+        proposedBy: "user",
+        data: { plan, customerId },
+        idempotencyKey: key
       });
 
-      res.json({ url: session.url });
+      const result = await withIdempotency({ key, workspaceId }, async () => {
+        const session = await getStripe().checkout.sessions.create({
+          payment_method_types: ["card"],
+          customer: customerId || undefined,
+          line_items: [
+            {
+              price_data: {
+                currency: "usd",
+                product_data: {
+                  name: `PropOS ${plan.toUpperCase()} Plan`,
+                },
+                unit_amount: plan === "pro" ? 4900 : 19900, // $49 or $199
+                recurring: { interval: "month" },
+              },
+              quantity: 1,
+            },
+          ],
+          mode: "subscription",
+          success_url: successUrl,
+          cancel_url: cancelUrl,
+          client_reference_id: workspaceId,
+          subscription_data: {
+            metadata: { plan }
+          },
+          metadata: { plan }
+        });
+
+        return { url: session.url };
+      });
+
+      res.json(result);
     } catch (error: any) {
+      if (error.message === "OPERATION_IN_PROGRESS") {
+        return res.status(409).json({ error: "An upgrade is already in progress. Please wait." });
+      }
       res.status(500).json({ error: error.message });
     }
   });
