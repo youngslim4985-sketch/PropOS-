@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 export function BillingDashboard() {
   const { activeWorkspace } = useTenant();
   const { data: usageLogs, loading } = useRealtimeCollection('usageLogs', activeWorkspace?.id);
+  const { data: intentEvents, loading: intentLoading } = useRealtimeCollection('intentEvents', activeWorkspace?.id);
   const [isUpgrading, setIsUpgrading] = useState<string | null>(null);
   const [isRedirecting, setIsRedirecting] = useState(false);
 
@@ -197,6 +198,52 @@ export function BillingDashboard() {
                   <td className="p-4 font-mono text-xs text-gold">${log.cost?.toFixed(3)}</td>
                   <td className="p-4 font-mono text-[10px] text-muted">
                     {log.timestamp?.toDate ? log.timestamp.toDate().toLocaleString() : 'Just now'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="terminal-card">
+        <div className="p-6 border-b border-border flex justify-between items-center">
+          <h3 className="font-display font-bold text-lg uppercase tracking-tight">Audit Trail & Intent Log</h3>
+          <Badge variant="outline" className="text-[10px] opacity-50">TRACEABILITY LAYER</Badge>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="bg-white/5">
+                <th className="p-4 meta-tag">Event Type</th>
+                <th className="p-4 meta-tag">Origin</th>
+                <th className="p-4 meta-tag">Context</th>
+                <th className="p-4 meta-tag">Timestamp</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {intentLoading ? (
+                <tr><td colSpan={4} className="p-8 text-center font-mono text-xs text-muted">Scanning ledger history...</td></tr>
+              ) : intentEvents.length === 0 ? (
+                <tr><td colSpan={4} className="p-8 text-center font-mono text-xs text-muted">No state changes recorded.</td></tr>
+              ) : intentEvents.sort((a,b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)).map((event) => (
+                <tr key={event.id} className="hover:bg-white/5 transition-colors">
+                  <td className="p-4">
+                    <div className="flex flex-col gap-1">
+                      <span className="font-mono text-xs font-bold uppercase tracking-widest text-accent">{event.type.replace(/_/g, ' ')}</span>
+                      {event.idempotencyKey && (
+                        <span className="text-[8px] font-mono text-muted uppercase">Key: {event.idempotencyKey.slice(0, 16)}...</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="p-4 font-mono text-[10px] text-muted uppercase">{event.proposedBy}</td>
+                  <td className="p-4">
+                    <div className="max-w-xs truncate font-mono text-[9px] text-muted bg-black/20 p-2 rounded border border-white/5">
+                      {JSON.stringify(event.data)}
+                    </div>
+                  </td>
+                  <td className="p-4 font-mono text-[10px] text-muted">
+                    {event.timestamp?.toDate ? event.timestamp.toDate().toLocaleString() : 'Just now'}
                   </td>
                 </tr>
               ))}

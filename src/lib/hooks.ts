@@ -9,7 +9,7 @@ export function useRealtimeCollection(collectionPath: string, workspaceId?: stri
 
   useEffect(() => {
     // Prevent global queries on scoped collections before a workspace is selected
-    const scopedCollections = ['properties', 'deals', 'buyers', 'matches', 'usageLogs'];
+    const scopedCollections = ['properties', 'deals', 'buyers', 'matches', 'usageLogs', 'intentEvents'];
     if (scopedCollections.includes(collectionPath) && !workspaceId) {
       setData([]);
       setLoading(false);

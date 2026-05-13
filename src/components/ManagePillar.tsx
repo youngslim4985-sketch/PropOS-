@@ -6,6 +6,7 @@ import { db } from '@/src/lib/firebase';
 import { useRealtimeCollection } from '@/src/lib/hooks';
 import { useTenant } from '@/src/lib/TenantContext';
 import { toast } from 'sonner';
+import { recordClientIntent } from '@/src/lib/audit';
 
 export function ManagePillar() {
   const { activeWorkspace } = useTenant();
@@ -34,7 +35,7 @@ export function ManagePillar() {
       return;
     }
 
-    addDoc(collection(db, 'properties'), {
+    const propertyData = {
       workspaceId: activeWorkspace.id,
       address: `${Math.floor(Math.random() * 9000) + 1000} Sunset Blvd, LA`,
       units: 4,
@@ -42,7 +43,16 @@ export function ManagePillar() {
       monthly_rent: 4200,
       status: 'active',
       createdAt: serverTimestamp()
+    };
+
+    recordClientIntent({
+      workspaceId: activeWorkspace.id,
+      type: 'PROPERTY_ADDITION_REQUESTED',
+      proposedBy: 'user',
+      data: propertyData
     });
+
+    addDoc(collection(db, 'properties'), propertyData);
   };
 
   return (

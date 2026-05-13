@@ -9,6 +9,7 @@ import { db } from '@/src/lib/firebase';
 import { useRealtimeCollection } from '@/src/lib/hooks';
 import { useTenant } from '@/src/lib/TenantContext';
 import { toast } from 'sonner';
+import { recordClientIntent } from '@/src/lib/audit';
 import { motion } from 'motion/react';
 
 // --- Types ---
@@ -80,6 +81,13 @@ export function SellPillar() {
     }
 
     toast.loading("Running Matching Engine...");
+    
+    recordClientIntent({
+      workspaceId: activeWorkspace.id,
+      type: 'MATCHING_ENGINE_INVOKED',
+      proposedBy: 'user',
+      data: { dealCount: deals.length, buyerCount: buyers.length }
+    });
     
     for (const deal of deals) {
       for (const buyer of buyers) {

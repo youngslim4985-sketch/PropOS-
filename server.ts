@@ -61,6 +61,15 @@ async function startServer() {
             subscriptionStatus: "active",
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           });
+
+          await recordIntent({
+            workspaceId,
+            type: "SUBSCRIPTION_ACTIVATED",
+            proposedBy: "stripe-webhook",
+            data: { plan, sessionId: session.id },
+            idempotencyKey: `webhook_${event.id}`
+          });
+
           console.log(`Workspace ${workspaceId} upgraded to ${plan}`);
         }
         break;
@@ -84,6 +93,15 @@ async function startServer() {
           if (plan) updateData.plan = plan;
           
           await workspaceDoc.ref.update(updateData);
+          
+          await recordIntent({
+            workspaceId: workspaceDoc.id,
+            type: "SUBSCRIPTION_UPDATED",
+            proposedBy: "stripe-webhook",
+            data: { plan, status, subscriptionId: subscription.id },
+            idempotencyKey: `webhook_${event.id}`
+          });
+
           console.log(`Workspace ${workspaceDoc.id} subscription updated: ${status}`);
         }
         break;
@@ -103,6 +121,15 @@ async function startServer() {
             subscriptionStatus: "canceled",
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           });
+
+          await recordIntent({
+            workspaceId: workspaceDoc.id,
+            type: "SUBSCRIPTION_CANCELLED",
+            proposedBy: "stripe-webhook",
+            data: { subscriptionId: subscription.id },
+            idempotencyKey: `webhook_${event.id}`
+          });
+
           console.log(`Workspace ${workspaceDoc.id} downgraded to free`);
         }
         break;
@@ -121,6 +148,15 @@ async function startServer() {
               subscriptionStatus: "past_due",
               updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             });
+
+            await recordIntent({
+              workspaceId: workspaceDoc.id,
+              type: "PAYMENT_FAILED",
+              proposedBy: "stripe-webhook",
+              data: { invoiceId: invoice.id, amount: invoice.amount_due },
+              idempotencyKey: `webhook_${event.id}`
+            });
+
             console.log(`Workspace ${workspaceDoc.id} payment failed`);
           }
         }
@@ -139,6 +175,14 @@ async function startServer() {
             await workspaceDoc.ref.update({
               subscriptionStatus: "active",
               updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+
+            await recordIntent({
+              workspaceId: workspaceDoc.id,
+              type: "PAYMENT_SUCCESS",
+              proposedBy: "stripe-webhook",
+              data: { invoiceId: invoice.id, amount: invoice.amount_paid },
+              idempotencyKey: `webhook_${event.id}`
             });
           }
         }
