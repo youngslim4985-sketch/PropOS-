@@ -12,13 +12,15 @@ import {
   ShieldCheck,
   ChevronDown,
   Plus,
-  CreditCard
+  CreditCard,
+  Bell
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
-import { auth } from '@/src/lib/firebase';
+import { auth, db } from '@/src/lib/firebase';
 import { signInWithPopup, GoogleAuthProvider, signOut, User } from 'firebase/auth';
+import { collection, query, where, onSnapshot, setDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { useTenant } from '@/src/lib/TenantContext';
 
 // --- Lazy Components ---
@@ -35,6 +37,46 @@ export default function App() {
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
 
   const { workspaces, activeWorkspace, setActiveWorkspace, isLoading: isTenancyLoading, createWorkspace } = useTenant();
+  const [pendingInvites, setPendingInvites] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    const q = query(collection(db, 'workspaceInvites'), where('email', '==', user.email), where('status', '==', 'pending'));
+    return onSnapshot(q, (sn) => {
+      setPendingInvites(sn.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+  }, [user]);
+
+  const handleAcceptInvite = async (invite: any) => {
+    try {
+      const memberId = `${user!.uid}_${invite.workspaceId}`;
+      await setDoc(doc(db, 'workspaceMembers', memberId), {
+        userId: user!.uid,
+        workspaceId: invite.workspaceId,
+        role: invite.role,
+        joinedAt: serverTimestamp()
+      });
+      await setDoc(doc(db, 'workspaceInvites', invite.id), {
+        status: 'accepted',
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      toast.success("Joined workspace successfully");
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
+  const handleDeclineInvite = async (inviteId: string) => {
+    try {
+      await setDoc(doc(db, 'workspaceInvites', inviteId), {
+        status: 'declined',
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      toast.info("Invite declined");
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((u) => {
@@ -242,6 +284,36 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-6">
+            <AnimatePresence>
+              {pendingInvites.length > 0 && (
+                <motion.div 
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className="relative cursor-pointer group"
+                >
+                  <Bell size={18} className="text-accent animate-bounce" />
+                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full text-[8px] flex items-center justify-center font-bold">
+                    {pendingInvites.length}
+                  </span>
+                  
+                  <div className="absolute top-full right-0 mt-4 w-64 bg-card border border-border rounded-lg shadow-2xl p-4 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all z-[100]">
+                    <p className="text-[10px] font-bold uppercase tracking-widest mb-3 border-b border-border pb-2">Pending Invitations</p>
+                    <div className="space-y-3">
+                      {pendingInvites.map(invite => (
+                        <div key={invite.id} className="space-y-2 p-2 bg-white/5 rounded border border-white/5">
+                          <p className="text-[9px] font-mono uppercase truncate opacity-70">Workspace ID: {invite.workspaceId.slice(0,8)}...</p>
+                          <p className="text-[10px] font-bold uppercase">Role: {invite.role}</p>
+                          <div className="flex gap-2">
+                            <Button size="sm" className="h-7 text-[8px] flex-1 bg-accent text-background" onClick={() => handleAcceptInvite(invite)}>Accept</Button>
+                            <Button size="sm" variant="ghost" className="h-7 text-[8px] flex-1 border border-border" onClick={() => handleDeclineInvite(invite.id)}>Decline</Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
             <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full border border-border">
               <span className="meta-tag text-[8px]">Network:</span>
               <span className="text-[10px] font-mono text-neon-cyan animate-pulse">0.8ms</span>

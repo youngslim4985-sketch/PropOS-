@@ -140,11 +140,28 @@
         "timestamp": { "type": "string", "format": "date-time" }
       },
       "required": ["workspaceId", "type", "proposedBy", "timestamp"]
+    },
+    "WorkspaceInvite": {
+      "title": "WorkspaceInvite",
+      "description": "Pending invitation to join a workspace.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "agent", "viewer"] },
+        "invitedBy": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined", "expired"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "expiresAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["workspaceId", "email", "role", "invitedBy", "status", "createdAt"]
     }
   },
   "firestore": {
     "/workspaces/{workspaceId}": { "schema": "Workspace", "description": "Workspace containers" },
     "/workspaceMembers/{memberId}": { "schema": "WorkspaceMember", "description": "Memberships" },
+    "/workspaceInvites/{inviteId}": { "schema": "WorkspaceInvite", "description": "Pending invites" },
     "/usageLogs/{logId}": { "schema": "UsageLog", "description": "Metering logs" },
     "/properties/{propertyId}": { "schema": "Property", "description": "Managed properties (scoped by workspaceId)" },
     "/deals/{dealId}": { "schema": "Deal", "description": "Acquisition deals (scoped by workspaceId)" },

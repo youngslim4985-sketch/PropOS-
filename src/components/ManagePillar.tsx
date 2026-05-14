@@ -9,8 +9,9 @@ import { toast } from 'sonner';
 import { recordClientIntent } from '@/src/lib/audit';
 
 export function ManagePillar() {
-  const { activeWorkspace } = useTenant();
+  const { activeWorkspace, activeRole } = useTenant();
   const { data: properties, loading } = useRealtimeCollection('properties', activeWorkspace?.id);
+  const isViewer = activeRole === 'viewer';
 
   const stats = useMemo(() => {
     const totalRent = properties.reduce((acc, p) => acc + (p.monthly_rent || 0), 0);
@@ -23,6 +24,10 @@ export function ManagePillar() {
 
   const addProperty = () => {
     if (!activeWorkspace) return;
+    if (isViewer) {
+      toast.error("Read-only access. Privilege escalation required.");
+      return;
+    }
 
     // Enforce Plan Limits
     if (activeWorkspace.plan === 'free' && properties.length >= 3) {
@@ -67,9 +72,11 @@ export function ManagePillar() {
       <div className="terminal-card">
         <div className="p-6 border-b border-border flex justify-between items-center">
           <h3 className="font-display font-bold text-lg uppercase tracking-tight">Portfolio Oversight</h3>
-          <Button variant="outline" size="sm" className="font-mono text-[10px] uppercase tracking-widest" onClick={addProperty}>
-            <Plus size={14} className="mr-2" /> Add Property
-          </Button>
+          {!isViewer && (
+            <Button variant="outline" size="sm" className="font-mono text-[10px] uppercase tracking-widest" onClick={addProperty}>
+              <Plus size={14} className="mr-2" /> Add Property
+            </Button>
+          )}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">

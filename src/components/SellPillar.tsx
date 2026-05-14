@@ -55,15 +55,20 @@ const calculateMatchScore = (deal: Deal, buyer: Buyer) => {
 };
 
 export function SellPillar() {
-  const { activeWorkspace } = useTenant();
+  const { activeWorkspace, activeRole } = useTenant();
   const { data: buyers, loading: loadingBuyers } = useRealtimeCollection('buyers', activeWorkspace?.id);
   const { data: deals } = useRealtimeCollection('deals', activeWorkspace?.id);
   const { data: matches, loading: loadingMatches } = useRealtimeCollection('matches', activeWorkspace?.id);
+  const isViewer = activeRole === 'viewer';
 
   const [showAddBuyer, setShowAddBuyer] = useState(false);
 
   const runMatching = async () => {
     if (!activeWorkspace) return;
+    if (isViewer) {
+      toast.error("Read-only access. Privilege escalation required.");
+      return;
+    }
     if (deals.length === 0 || buyers.length === 0) {
       toast.error("Insufficient data for matching.");
       return;

@@ -2,21 +2,39 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Default Deny
+    // -------------------------------------------------------------------------
+    // Pillar 0: Default Deny
+    // -------------------------------------------------------------------------
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Helper Functions
+    // -------------------------------------------------------------------------
+    // Pillar 3: Path Variable Hardening & Global Primitives
+    // -------------------------------------------------------------------------
     function isSignedIn() {
-      return request.auth != null;
+      return request.auth != null && request.auth.token.email_verified == true;
     }
-    
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // -------------------------------------------------------------------------
+    // Pillar 1: The Master Gate (Relational Sync)
+    // -------------------------------------------------------------------------
     function isMember(workspaceId) {
-      return isSignedIn() && 
-             exists(/databases/$(database)/documents/workspaceMembers/$(request.auth.uid + "_" + workspaceId));
+      return isSignedIn() && exists(/databases/$(database)/documents/workspaceMembers/$(request.auth.uid + "_" + workspaceId));
     }
-    
+
     function getRole(workspaceId) {
       return get(/databases/$(database)/documents/workspaceMembers/$(request.auth.uid + "_" + workspaceId)).data.role;
     }
@@ -25,55 +43,101 @@ service cloud.firestore {
       return isMember(workspaceId) && getRole(workspaceId) == 'admin';
     }
 
+    function isAgent(workspaceId) {
+      return isMember(workspaceId) && (getRole(workspaceId) == 'admin' || getRole(workspaceId) == 'agent');
+    }
+
+    // -------------------------------------------------------------------------
+    // Pillar 2: Validation Blueprints (Schema Hardening)
+    // -------------------------------------------------------------------------
+    function isValidWorkspace(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.ownerId == request.auth.uid;
+    }
+
+    function isValidProperty(data) {
+      return data.address is string && data.address.size() > 0 &&
+             data.workspaceId is string &&
+             data.ownerId == request.auth.uid;
+    }
+
+    function isValidIntent(data) {
+      return data.workspaceId is string && data.type is string && data.proposedBy is string;
+    }
+
+    // -------------------------------------------------------------------------
+    // COLLECTION MATCH BLOCKS
+    // -------------------------------------------------------------------------
+
     // Workspaces
     match /workspaces/{workspaceId} {
-      allow read: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isMember(workspaceId));
-      allow create: if isSignedIn(); // Allow creating new workspaces
-      allow update: if isAdmin(workspaceId);
+      allow get: if isMember(workspaceId);
+      allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isMember(workspaceId));
+      allow create: if isSignedIn() && isValidWorkspace(incoming());
+      allow update: if isAdmin(workspaceId) && 
+                      incoming().diff(existing()).affectedKeys().hasOnly(['name', 'plan', 'subscriptionStatus', 'updatedAt']);
     }
 
     // Workspace Memberships
-    // Using custom IDs like userId_workspaceId for easy lookups
     match /workspaceMembers/{memberId} {
-      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isMember(resource.data.workspaceId));
-      allow create: if isSignedIn(); // Allow joining or following creation logic
-      allow delete: if isAdmin(resource.data.workspaceId);
+      allow read: if isMember(incoming().workspaceId || existing().workspaceId);
+      allow create: if isSignedIn() && (incoming().userId == request.auth.uid || isAdmin(incoming().workspaceId));
+      allow delete: if isAdmin(existing().workspaceId);
     }
 
-    // Usage Logs (Metering)
-    match /usageLogs/{logId} {
-      allow read: if isAdmin(resource.data.workspaceId);
-      allow create: if isMember(request.resource.data.workspaceId);
-      allow update, delete: if false; // Immutable logs
+    // Workspace Invites
+    match /workspaceInvites/{inviteId} {
+      allow read: if isSignedIn() && (request.auth.token.email == resource.data.email || isAdmin(resource.data.workspaceId));
+      allow create: if isAdmin(incoming().workspaceId);
+      allow update: if isSignedIn() && request.auth.token.email == existing().email && 
+                      incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+      allow delete: if isAdmin(existing().workspaceId);
     }
 
-    // Business Entities (Scoped)
+    // Intent Events (Audit Trail)
+    match /intentEvents/{eventId} {
+      allow read: if isMember(resource.data.workspaceId);
+      allow create: if isMember(incoming().workspaceId) && isValidIntent(incoming());
+    }
+
+    // Idempotency Requests
+    match /idempotencyRequests/{key} {
+      allow read: if isMember(resource.data.workspaceId);
+      allow write: if isMember(incoming().workspaceId);
+    }
+
+    // Business Entities
     match /properties/{propertyId} {
       allow read: if isMember(resource.data.workspaceId);
-      allow create: if isMember(request.resource.data.workspaceId);
-      allow update: if isMember(resource.data.workspaceId);
-      allow delete: if isAdmin(resource.data.workspaceId);
+      allow create: if isAgent(incoming().workspaceId) && isValidProperty(incoming());
+      allow update: if isAgent(existing().workspaceId) && incoming().workspaceId == existing().workspaceId;
+      allow delete: if isAdmin(existing().workspaceId);
     }
 
     match /deals/{dealId} {
       allow read: if isMember(resource.data.workspaceId);
-      allow create: if isMember(request.resource.data.workspaceId);
-      allow update: if isMember(resource.data.workspaceId);
-      allow delete: if isAdmin(resource.data.workspaceId);
+      allow create: if isAgent(incoming().workspaceId);
+      allow update: if isAgent(existing().workspaceId);
+      allow delete: if isAdmin(existing().workspaceId);
     }
 
     match /buyers/{buyerId} {
       allow read: if isMember(resource.data.workspaceId);
-      allow create: if isMember(request.resource.data.workspaceId);
-      allow update: if isMember(resource.data.workspaceId);
-      allow delete: if isAdmin(resource.data.workspaceId);
+      allow create: if isAgent(incoming().workspaceId);
+      allow update: if isAgent(existing().workspaceId);
+      allow delete: if isAdmin(existing().workspaceId);
     }
 
     match /matches/{matchId} {
       allow read: if isMember(resource.data.workspaceId);
-      allow create: if isMember(request.resource.data.workspaceId);
-      allow update: if isMember(resource.data.workspaceId);
-      allow delete: if isAdmin(resource.data.workspaceId);
+      allow create: if isAgent(incoming().workspaceId);
+      allow update: if isAgent(existing().workspaceId);
+      allow delete: if isAdmin(existing().workspaceId);
+    }
+
+    match /usageLogs/{logId} {
+      allow read: if isAdmin(resource.data.workspaceId);
+      allow create: if isMember(incoming().workspaceId);
     }
   }
 }

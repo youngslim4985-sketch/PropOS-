@@ -31,12 +31,17 @@ const calculateDealScore = (deal: Partial<Deal>) => {
 };
 
 export function AcquirePillar() {
-  const { activeWorkspace } = useTenant();
+  const { activeWorkspace, activeRole } = useTenant();
   const { data: deals, loading } = useRealtimeCollection('deals', activeWorkspace?.id);
   const { data: usageLogs } = useRealtimeCollection('usageLogs', activeWorkspace?.id);
+  const isViewer = activeRole === 'viewer';
 
   const runScan = () => {
     if (!activeWorkspace || !auth.currentUser) return;
+    if (isViewer) {
+      toast.error("Read-only access. Privilege escalation required.");
+      return;
+    }
 
     // Enforce Plan Limits
     const scanCount = usageLogs.filter(log => log.actionType === ActionType.AI_DEAL_SCAN).length;
@@ -95,9 +100,11 @@ export function AcquirePillar() {
           <h2 className="font-display font-black text-3xl uppercase tracking-tight">DealFlow Pipeline</h2>
           <p className="meta-tag">Acquisition Engine Active</p>
         </div>
-        <Button className="bg-accent text-background hover:bg-accent/90 font-bold uppercase tracking-widest text-[10px]" onClick={runScan}>
-          <Search size={14} className="mr-2" /> Run DealFlow AI
-        </Button>
+        {!isViewer && (
+          <Button className="bg-accent text-background hover:bg-accent/90 font-bold uppercase tracking-widest text-[10px]" onClick={runScan}>
+            <Search size={14} className="mr-2" /> Run DealFlow AI
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -107,7 +114,7 @@ export function AcquirePillar() {
           <div className="col-span-2 py-24 text-center space-y-4 terminal-card">
             <Target className="w-12 h-12 mx-auto text-muted opacity-20" />
             <p className="font-mono text-xs text-muted">No active deals in pipeline.</p>
-            <Button variant="outline" size="sm" onClick={runScan}>Initialize Scan</Button>
+            {!isViewer && <Button variant="outline" size="sm" onClick={runScan}>Initialize Scan</Button>}
           </div>
         ) : deals.map((deal) => (
           <div key={deal.id} className="terminal-card p-6 flex gap-6 group">
@@ -140,7 +147,7 @@ export function AcquirePillar() {
 
               <div className="flex items-center justify-between">
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="text-[9px] uppercase font-bold tracking-widest" onClick={() => deleteDoc(doc(db, 'deals', deal.id))}>Discard</Button>
+                  {!isViewer && <Button variant="outline" size="sm" className="text-[9px] uppercase font-bold tracking-widest" onClick={() => deleteDoc(doc(db, 'deals', deal.id))}>Discard</Button>}
                   <Button variant="outline" size="sm" className="text-[9px] uppercase font-bold tracking-widest border-accent text-accent hover:bg-accent hover:text-background">Analyze</Button>
                 </div>
                 <Button className="bg-white text-background hover:bg-white/90 text-[9px] uppercase font-bold tracking-widest">
