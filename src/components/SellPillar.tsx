@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, Activity, Database, ChevronRight, Mail, MessageSquare } from 'lucide-react';
+import { Plus, Activity, Database, ChevronRight, Mail, MessageSquare, TrendingUp } from 'lucide-react';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/src/lib/firebase';
 import { useRealtimeCollection } from '@/src/lib/hooks';
@@ -11,6 +11,7 @@ import { useTenant } from '@/src/lib/TenantContext';
 import { toast } from 'sonner';
 import { recordClientIntent } from '@/src/lib/audit';
 import { motion } from 'motion/react';
+import { useSimulationStats } from '@/src/lib/simulationHooks';
 
 // --- Types ---
 interface Deal {
@@ -60,6 +61,12 @@ export function SellPillar() {
   const { data: deals } = useRealtimeCollection('deals', activeWorkspace?.id);
   const { data: matches, loading: loadingMatches } = useRealtimeCollection('matches', activeWorkspace?.id);
   const isViewer = activeRole === 'viewer';
+
+  // O(N) Statistics Engine
+  const stats = useSimulationStats(useMemo(() => 
+    matches.map(m => ({ simulatedScore: m.score })), 
+    [matches]
+  ));
 
   const [showAddBuyer, setShowAddBuyer] = useState(false);
 
@@ -241,6 +248,33 @@ export function SellPillar() {
           <h3 className="font-display font-bold text-sm uppercase tracking-tight">Market Velocity</h3>
         </div>
         <div className="p-6 space-y-8">
+          <div className="space-y-4">
+            <p className="meta-tag flex items-center gap-2">
+              <TrendingUp size={12} />
+              Statistical Distribution
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="terminal-card p-3 bg-white/5 space-y-1">
+                <span className="text-[8px] text-muted uppercase font-mono">Mean Score</span>
+                <p className="text-xs font-bold font-display text-accent">{stats.mean.toFixed(1)}%</p>
+              </div>
+              <div className="terminal-card p-3 bg-white/5 space-y-1">
+                <span className="text-[8px] text-muted uppercase font-mono">Standard Dev</span>
+                <p className="text-xs font-bold font-display text-gold">±{stats.stdDev.toFixed(1)}</p>
+              </div>
+              <div className="terminal-card p-3 bg-white/5 space-y-1">
+                <span className="text-[8px] text-muted uppercase font-mono">Median (P50)</span>
+                <p className="text-xs font-bold font-display text-neon-cyan">{stats.median.toFixed(1)}%</p>
+              </div>
+              <div className="terminal-card p-3 bg-white/5 space-y-1">
+                <span className="text-[8px] text-muted uppercase font-mono">IQR (P25-P75)</span>
+                <p className="text-xs font-bold font-display text-muted">
+                  {stats.p25.toFixed(0)}-{stats.p75.toFixed(0)}
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div className="space-y-4">
             <p className="meta-tag">Distribution Channels</p>
             {[

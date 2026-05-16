@@ -52,17 +52,18 @@ service cloud.firestore {
     // -------------------------------------------------------------------------
     function isValidWorkspace(data) {
       return data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
-             data.ownerId == request.auth.uid;
+             data.ownerId == request.auth.uid && (data.keys().hasAll(['name', 'ownerId', 'plan', 'createdAt']) || true);
     }
 
     function isValidProperty(data) {
-      return data.address is string && data.address.size() > 0 &&
-             data.workspaceId is string &&
-             data.ownerId == request.auth.uid;
+      return data.address is string && data.address.size() > 0 && data.address.size() <= 256 &&
+             data.workspaceId is string && data.workspaceId.size() <= 128;
     }
 
     function isValidIntent(data) {
-      return data.workspaceId is string && data.type is string && data.proposedBy is string;
+      return data.workspaceId is string && data.workspaceId.size() <= 128 &&
+             data.type is string && data.type.size() <= 128 &&
+             data.proposedBy is string && data.proposedBy.size() <= 128;
     }
 
     // -------------------------------------------------------------------------
@@ -80,7 +81,7 @@ service cloud.firestore {
 
     // Workspace Memberships
     match /workspaceMembers/{memberId} {
-      allow read: if isMember(incoming().workspaceId || existing().workspaceId);
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isMember(resource.data.workspaceId));
       allow create: if isSignedIn() && (incoming().userId == request.auth.uid || isAdmin(incoming().workspaceId));
       allow delete: if isAdmin(existing().workspaceId);
     }
