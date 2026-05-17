@@ -1,34 +1,22 @@
-import { GoogleGenAI, Type } from "@google/genai";
-
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+import { auth } from './firebase';
 
 export async function matchDealToBuyer(deal: any, buyer: any) {
-  const prompt = `
-    Analyze the match between this real estate deal and this buyer.
-    
-    Deal: ${JSON.stringify(deal)}
-    Buyer: ${JSON.stringify(buyer)}
-    
-    Return a JSON object with:
-    - score: (0-100)
-    - reasons: string[] (top 3 reasons why it's a match or not)
-  `;
+  const token = await auth.currentUser?.getIdToken();
+  if (!token) throw new Error("Authentication required for AI analysis");
 
-  const response = await ai.models.generateContent({
-    model: "gemini-2.0-flash",
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          score: { type: Type.NUMBER },
-          reasons: { type: Type.ARRAY, items: { type: Type.STRING } }
-        },
-        required: ["score", "reasons"]
-      }
-    }
+  const response = await fetch("/api/ai/match", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    },
+    body: JSON.stringify({ deal, buyer }),
   });
 
-  return JSON.parse(response.text);
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to analyze match");
+  }
+
+  return response.json();
 }

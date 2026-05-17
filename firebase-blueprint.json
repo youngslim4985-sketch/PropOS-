@@ -69,6 +69,8 @@
         "workspaceId": { "type": "string" },
         "title": { "type": "string" },
         "address": { "type": "string" },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
         "price": { "type": "number" },
         "arv": { "type": "number" },
         "rehabCost": { "type": "number" },

@@ -4,7 +4,26 @@ import { createServer as createViteServer } from "vite";
 import Stripe from "stripe";
 import bodyParser from "body-parser";
 import admin from "firebase-admin";
+import { GoogleGenAI, Type } from "@google/genai";
 import { withIdempotency, recordIntent } from "./src/lib/idempotency";
+
+// Auth middleware
+const verifyAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized: No token provided" });
+  }
+
+  const token = authHeader.split("Bearer ")[1];
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    (req as any).user = decodedToken;
+    next();
+  } catch (error) {
+    console.error("Auth Error:", error);
+    res.status(401).json({ error: "Unauthorized: Invalid token" });
+  }
+};
 
 // Initialize Firebase Admin
 // Note: In AI Studio, we can often rely on default credentials or env vars
@@ -21,6 +40,17 @@ function getStripe() {
     stripeClient = new Stripe(key);
   }
   return stripeClient;
+}
+
+// Initialize Gemini AI
+let genAI: GoogleGenAI | null = null;
+function getGenAI() {
+  if (!genAI) {
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) throw new Error("GEMINI_API_KEY is missing");
+    genAI = new GoogleGenAI({ apiKey: key });
+  }
+  return genAI;
 }
 
 async function startServer() {
@@ -266,6 +296,51 @@ async function startServer() {
 
       res.json({ url: portalSession.url });
     } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/ai/match", verifyAuth, async (req, res) => {
+    try {
+      const { deal, buyer } = req.body;
+      if (!deal || !buyer) {
+        return res.status(400).json({ error: "Missing deal or buyer data" });
+      }
+
+      const prompt = `
+        Analyze the match between this real estate deal and this buyer.
+        
+        Deal: ${JSON.stringify(deal)}
+        Buyer: ${JSON.stringify(buyer)}
+        
+        Return a JSON object with:
+        - score: (0-100)
+        - reasons: string[] (top 3 reasons why it's a match or not)
+      `;
+
+      const response = await getGenAI().models.generateContent({ 
+        model: "gemini-2.0-flash",
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              score: { type: Type.NUMBER },
+              reasons: { 
+                type: Type.ARRAY, 
+                items: { type: Type.STRING } 
+              }
+            },
+            required: ["score", "reasons"]
+          }
+        },
+        contents: prompt
+      });
+
+      const output = JSON.parse(response.text);
+      res.json(output);
+    } catch (error: any) {
+      console.error("Gemini Error:", error);
       res.status(500).json({ error: error.message });
     }
   });
